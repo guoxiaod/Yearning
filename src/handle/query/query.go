@@ -241,11 +241,16 @@ func FetchQueryResults(c yee.Context) (err error) {
 		return c.JSON(http.StatusOK, err.Error())
 	}
 
+    // 获取UserQueryParams
+    var uqr model.QueryParams
+
+    uqr, _ = lib.GetUserQueryParams(user, req.Source, u)
+
 	req.Sql = r.SQL
 
 	//结束
 	t1 := time.Now()
-	data, err := lib.QueryMethod(&u, req, r.InsulateWordList)
+	data, err := lib.QueryMethod(&u, req, r.InsulateWordList, uqr)
 
 	if err != nil {
 		return c.JSON(http.StatusOK, err.Error())

@@ -59,6 +59,7 @@ type CoreAccount struct {
 	Department string `gorm:"type:varchar(50);" json:"department"`
 	RealName   string `gorm:"type:varchar(50);" json:"real_name"`
 	Email      string `gorm:"type:varchar(50);" json:"email"`
+    QueryParams JSON  `gorm:"type:json;" json:"query_params"`
 }
 
 type CoreGlobalConfiguration struct {
@@ -125,6 +126,9 @@ type CoreDataSource struct {
 	Username string `gorm:"type:varchar(50);not null" json:"username"`
 	Password string `gorm:"type:varchar(150);not null" json:"password"`
 	IsQuery  int    `gorm:"type:tinyint(2);not null" json:"is_query"` // 0写 1读 2读写
+    Params   string `gorm:"type:varchar(500);not null;default:''" json:"params"` // 额外的链接参数k1=v1&k2=v2&k3=v3
+    LimitCount int  `gorm:"type:int(10);not null" json:"limit_count"`
+    ExQueryTime int `gorm:"type:int(10);not null" json:"ex_query_time"`
 }
 
 type CoreGrained struct {
@@ -137,6 +141,7 @@ type CoreRoleGroup struct {
 	ID          uint   `gorm:"primary_key;AUTO_INCREMENT" json:"id"`
 	Name        string `gorm:"type:varchar(50);not null" json:"name"`
 	Permissions JSON   `gorm:"type:json" json:"permissions"`
+    QueryParams JSON   `gorm:"type:json" json:"query_params"`
 }
 
 type CoreQueryOrder struct {

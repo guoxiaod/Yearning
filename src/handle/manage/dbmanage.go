@@ -34,6 +34,9 @@ type dbInfo struct {
 	Username string `json:"username"`
 	IsQuery  int    `json:"is_query"`
 	Valve    bool   `json:"valve"`
+    Params   string `json:"params"`
+    LimitCount  int `json:"limit_count"`
+    ExQueryTime int `json:"ex_query_time"`
 }
 
 type editDb struct {
@@ -101,6 +104,9 @@ func SuperCreateSource(c yee.Context) (err error) {
 				Password: x,
 				Username: u.Username,
 				IsQuery:  u.IsQuery,
+                Params:   u.Params,
+                LimitCount: u.LimitCount,
+                ExQueryTime: u.ExQueryTime,
 			})
 			return c.JSON(http.StatusOK, "连接名添加成功！")
 		}
@@ -157,10 +163,10 @@ func SuperEditSource(c yee.Context) (err error) {
 		return c.JSON(http.StatusInternalServerError, "")
 	}
 	if u.Data.Password == "***********" {
-		model.DB().Model(&model.CoreDataSource{}).Where("source =?", u.Data.Source).Updates(&model.CoreDataSource{IP: u.Data.IP, Port: u.Data.Port, Username: u.Data.Username})
+        model.DB().Model(&model.CoreDataSource{}).Where("source =?", u.Data.Source).Updates(&model.CoreDataSource{IP: u.Data.IP, Port: u.Data.Port, Username: u.Data.Username, Params: u.Data.Params, ExQueryTime: u.Data.ExQueryTime, LimitCount: u.Data.LimitCount})
 	} else {
 		x := lib.Encrypt(u.Data.Password)
-		model.DB().Model(&model.CoreDataSource{}).Where("source =?", u.Data.Source).Updates(&model.CoreDataSource{IP: u.Data.IP, Port: u.Data.Port, Username: u.Data.Username, Password: x})
+		model.DB().Model(&model.CoreDataSource{}).Where("source =?", u.Data.Source).Updates(&model.CoreDataSource{IP: u.Data.IP, Port: u.Data.Port, Username: u.Data.Username, Password: x, Params: u.Data.Params, ExQueryTime: u.Data.ExQueryTime, LimitCount: u.Data.LimitCount})
 	}
 
 	return c.JSON(http.StatusOK, "数据源信息已更新!")

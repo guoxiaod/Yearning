@@ -19,7 +19,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/cookieY/sqlx"
+    "database/sql"
 	"github.com/cookieY/yee"
 	_ "github.com/go-sql-driver/mysql"
 	"gopkg.in/ldap.v3"
@@ -28,6 +28,9 @@ import (
 	"math/rand"
 	"strconv"
 	"time"
+    "regexp"
+    "errors"
+    "context"
 )
 
 func ResearchDel(s []string, p string) []string {
@@ -91,7 +94,7 @@ func LdapConnenct(c yee.Context, l *model.Ldap, user string, pass string, isTest
 	searchRequest := ldap.NewSearchRequest(
 		l.Sc,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
-		fmt.Sprintf("(&(objectClass=organizationalPerson)%s)", s),
+		fmt.Sprintf("(&(objectClass=organizationalPerson)%s%s)", s, l.Filter),
 		[]string{"dn"},
 		nil,
 	)
@@ -191,34 +194,119 @@ type querydata struct {
 	Data  []map[string]interface{}
 }
 
-func QueryMethod(source *model.CoreDataSource, req *model.Queryresults, wordList []string) (querydata, error) {
+func SetExQueryTime(conn *sql.Conn, ctx context.Context, exQueryTime int) (error) {
+    if exQueryTime == 0 {
+        return nil
+    }
+    rows, err := conn.QueryContext(ctx, "SHOW VARIABLES LIKE 'max_statement_time'")
+    if err != nil {
+        return err
+    }
+
+    exQueryTime = exQueryTime * 1000
+    hasResult := rows.Next()
+    rows.Close()
+    if hasResult {
+        _, err := conn.ExecContext(ctx, fmt.Sprintf("SET max_statement_time = %d", exQueryTime))
+        if err != nil {
+            return err
+        }
+        return nil
+    }
+    _, err = conn.ExecContext(ctx, fmt.Sprintf("SET max_execution_time = %d", exQueryTime))
+    if err != nil {
+        return err
+    }
+    return nil
+}
+
+func checkLimitCount(sql string, limitCount int) (error) {
+    if limitCount == 0 {
+        return nil
+    }
+
+    // 不限制是否超过全局的配置
+    // globalLimit, err := strconv.Atoi(model.GloOther.Limit)
+    // if limitCount > globalLimit && globalLimit > 0 {
+    //     limitCount = globalLimit
+    // }
+
+    var limit int
+    var re = regexp.MustCompile(`(?i)limit\s+(\d+)[\s;]*$`)
+    results := re.FindStringSubmatch(sql)
+    if len(results) >= 2 {
+        limit, _ = strconv.Atoi(results[1])
+    }
+    if limitCount > 0 && limit > limitCount {
+        return errors.New(fmt.Sprintf("您每次最多可以查询 %d 条记录", limitCount))
+    }
+    return nil
+}
+
+func QueryMethod(source *model.CoreDataSource, req *model.Queryresults, wordList []string, queryParams model.QueryParams) (querydata, error) {
 
 	var qd querydata
 
+    err := checkLimitCount(req.Sql, queryParams.LimitCount)
+    if err != nil {
+        return qd, err
+    }
+
+    var ctx context.Context
+    ctx = context.Background()
+    var params string
+    if len(source.Params) > 2 {
+        params = source.Params
+    }
 	ps := Decrypt(source.Password)
-
-	db, err := sqlx.Connect("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4", source.Username, ps, source.IP, source.Port, req.Basename))
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&%s", source.Username, ps, source.IP, source.Port, req.Basename, params))
 	if err != nil {
 		return qd, err
 	}
-
 	defer db.Close()
+    // db.Close()
 
-	rows, err := db.Queryx(req.Sql)
+    conn, err := db.Conn(ctx)
+    if err != nil {
+        return qd, err
+    }
+    defer conn.Close()
+    err = conn.PingContext(ctx)
+    if err != nil {
+        return qd, err
+    }
 
-	if err != nil {
-		return qd, err
-	}
+    SetExQueryTime(conn, ctx, queryParams.ExQueryTime)
 
-	cols, err := rows.Columns()
-
+	rows, err := conn.QueryContext(ctx, req.Sql)
 	if err != nil {
 		return qd, err
 	}
 	defer rows.Close()
+
+	cols, err := rows.Columns()
+	if err != nil {
+		return qd, err
+	}
+
+    nodupcols := removeDuplicateElement(cols)
 	for rows.Next() {
 		results := make(map[string]interface{})
-		_ = rows.MapScan(results)
+
+		values := make([]interface{}, len(cols))
+		for i := range values {
+			values[i] = new(interface{})
+		}
+
+		err = rows.Scan(values...)
+		if err != nil {
+			return qd, err
+		}
+
+		for i, column := range nodupcols {
+			results[column] = *(values[i].(*interface{}))
+		}
+
 		for idx := range results {
 			switch r := results[idx].(type) {
 			case []uint8:
@@ -248,9 +336,7 @@ func QueryMethod(source *model.CoreDataSource, req *model.Queryresults, wordList
 		qd.Data = append(qd.Data, results)
 	}
 
-	ele := removeDuplicateElement(cols)
-
-	for _, cv := range ele {
+	for _, cv := range nodupcols {
 		qd.Field = append(qd.Field, map[string]string{"title": cv, "key": cv, "width": "200"})
 	}
 	qd.Field[0]["fixed"] = "left"
@@ -312,4 +398,88 @@ func MulitUserRuleMarge(group []string) model.PermissionList {
 	u.QuerySource = removeDuplicateElementForRule(u.QuerySource)
 
 	return u
+}
+
+func GetCorrectQueryParams(maxParams model.QueryParams, params model.QueryParams) (model.QueryParams) {
+    if params.LimitCount > maxParams.LimitCount {
+        params.LimitCount = 0
+    }
+    if params.ExQueryTime > maxParams.ExQueryTime {
+        params.ExQueryTime = 0
+    }
+    return params
+}
+
+func GetUserQueryParams(user string, source string, dataSource model.CoreDataSource) (model.QueryParams, error) {
+    var ret model.QueryParams
+    var params model.QueryParams
+    var maxParams model.QueryParams
+    var user_row model.CoreAccount
+    var group_row model.CoreGrained
+    var groups []string
+    var queryParams []model.QueryParams
+
+
+    // 1. 获取全局配置
+    maxParams.LimitCount, _ = strconv.Atoi(model.GloOther.Limit)
+    maxParams.ExQueryTime = model.GloOther.ExQueryTime
+
+    // 2. 如果数据库配置了，则使用数据库的配置
+    if dataSource.LimitCount > 0 {
+        maxParams.LimitCount = dataSource.LimitCount
+    }
+    if dataSource.ExQueryTime > 0 {
+        maxParams.ExQueryTime = dataSource.ExQueryTime
+    }
+
+    // 3. 获取用户的参数配置
+    //    如果用户配置了参数，且未超过最大的配置，则使用用户的配置
+    //    如果用户配置的参数超过最大的配置，则使用最大的配置
+    model.DB().Where("username = ?", user).Take(&user_row)
+    _ = json.Unmarshal(user_row.QueryParams, &params)
+
+    ret = GetCorrectQueryParams(maxParams, params)
+    if ret.LimitCount > 0 && ret.ExQueryTime > 0 {
+        return ret, nil
+    }
+
+    // 4 获取用户所属的权限组
+    params.LimitCount = 0
+    params.ExQueryTime = 0
+    model.DB().Where("username = ?", user).Take(&group_row)
+    _ = json.Unmarshal(group_row.Group, &groups)
+
+    if len(groups) > 0 {
+        // 4.1 获取用户权限组对应的参数配置，如果权限组配置了，则使用权限组配置
+        model.DB().Model(&model.CoreRoleGroup{}).Select("query_params").Limit(1000).Where("name in (?)", groups).Where("JSON_SEARCH(permissions, 'one', ?, 1, '$.query_source') is not null", source).Scan(&queryParams)
+
+        // 选择最大的那个 LimitCount 以及 ExQueryTime
+        for _, i := range queryParams {
+            if params.LimitCount < i.LimitCount {
+                params.LimitCount = i.LimitCount
+            }
+            if params.ExQueryTime < i.ExQueryTime {
+                params.ExQueryTime = i.ExQueryTime
+            }
+        }
+
+        params = GetCorrectQueryParams(maxParams, params)
+    }
+    // 权限组为空，则使用最大值
+    if params.LimitCount == 0  {
+        params.LimitCount = maxParams.LimitCount
+    }
+    if params.ExQueryTime == 0 {
+        params.ExQueryTime = maxParams.ExQueryTime
+    }
+
+    // 用户为空，则使用权限组
+    if ret.LimitCount == 0 {
+        ret.LimitCount = params.LimitCount
+    }
+    if ret.ExQueryTime == 0 {
+        ret.ExQueryTime = params.ExQueryTime
+    }
+
+    return ret, nil
 }

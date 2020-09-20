@@ -25,10 +25,11 @@ import (
 )
 
 type k struct {
-	Username   string
-	Permission model.PermissionList
-	Tp         int
-	Group      []string
+	Username    string
+	Permission  model.PermissionList
+    QueryParams model.QueryParams `json:"query_params"`
+	Tp          int
+	Group       []string
 }
 
 type marge struct {
@@ -75,15 +76,21 @@ func SuperGroupUpdate(c yee.Context) (err error) {
 			c.Logger().Error(err.Error())
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
+        qp, err := json.Marshal(u.QueryParams)
+		if err != nil {
+			c.Logger().Error(err.Error())
+			return c.JSON(http.StatusInternalServerError, err.Error())
+		}
 		if u.Tp == 1 {
 			var s model.CoreRoleGroup
 			if model.DB().Where("`name` =?", u.Username).First(&s).RecordNotFound() {
 				model.DB().Create(&model.CoreRoleGroup{
 					Name:        u.Username,
 					Permissions: g,
+                    QueryParams: qp,
 				})
 			} else {
-				model.DB().Model(model.CoreRoleGroup{}).Where("`name` =?", u.Username).Update(&model.CoreRoleGroup{Permissions: g})
+                model.DB().Model(model.CoreRoleGroup{}).Where("`name` =?", u.Username).Update(&model.CoreRoleGroup{Permissions: g, QueryParams: qp})
 			}
 			return c.JSON(http.StatusOK, fmt.Sprintf("%s权限组已创建！", u.Username))
 		} else {

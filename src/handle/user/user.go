@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-
 	"github.com/cookieY/yee"
 )
 
@@ -34,6 +33,7 @@ type userInfo struct {
 	Valve      bool   `json:"valve"`
 	Tp         string `json:"tp"`
 	Group      string `json:"group"`
+    QueryParams model.QueryParams `json:"query_params"`
 }
 
 type register struct {
@@ -192,8 +192,13 @@ func SuperUserEdit(c yee.Context) (err error) {
 	}
 	switch u.Tp {
 	case "info":
+        qp, err := json.Marshal(u.QueryParams)
+        if err != nil {
+            c.Logger().Error(err.Error())
+            return c.JSON(http.StatusInternalServerError, "")
+        }
 		tx := model.DB().Begin()
-		tx.Model(model.CoreAccount{}).Where("username = ?", u.Username).Updates(model.CoreAccount{Email: u.Mail, RealName: u.RealName, Department: u.Department})
+        tx.Model(model.CoreAccount{}).Where("username = ?", u.Username).Updates(model.CoreAccount{Email: u.Mail, RealName: u.RealName, Department: u.Department, QueryParams: qp})
 		tx.Model(model.CoreSqlOrder{}).Where("username =?", u.Username).Update(model.CoreSqlOrder{RealName: u.RealName})
 		tx.Model(model.CoreQueryOrder{}).Where("username =?", u.Username).Update(model.CoreQueryOrder{Realname: u.RealName})
 		tx.Commit()

@@ -59,6 +59,12 @@ type Ldap struct {
 	Type     int    `json:"type"`
 	Sc       string `json:"sc"`
 	Ldaps    bool   `json:"ldaps"`
+    Filter   string `json:"filter"`
+}
+
+type QueryParams struct {
+    LimitCount  int     `json:"limit_count"`
+    ExQueryTime int     `json:"ex_query_time"`
 }
 
 type PermissionList struct {
