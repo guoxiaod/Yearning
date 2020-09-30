@@ -198,7 +198,8 @@ func SuperUserEdit(c yee.Context) (err error) {
             return c.JSON(http.StatusInternalServerError, "")
         }
 		tx := model.DB().Begin()
-        tx.Model(model.CoreAccount{}).Where("username = ?", u.Username).Updates(model.CoreAccount{Email: u.Mail, RealName: u.RealName, Department: u.Department, QueryParams: qp})
+        updates := model.CoreAccount{Email: u.Mail, RealName: u.RealName, Department: u.Department, Rule: u.Rule, QueryParams: qp}
+        tx.Model(model.CoreAccount{}).Where("username = ?", u.Username).Updates(updates)
 		tx.Model(model.CoreSqlOrder{}).Where("username =?", u.Username).Update(model.CoreSqlOrder{RealName: u.RealName})
 		tx.Model(model.CoreQueryOrder{}).Where("username =?", u.Username).Update(model.CoreQueryOrder{Realname: u.RealName})
 		tx.Commit()
