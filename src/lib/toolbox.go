@@ -56,11 +56,12 @@ func Paging(page interface{}, total int) (start int, end int) {
 	return
 }
 
-func LdapConnenct(c yee.Context, l *model.Ldap, user string, pass string, isTest bool) bool {
+func LdapConnenct(c yee.Context, l *model.Ldap, user string, pass string, isTest bool) (map[string]string, bool) {
 
 	var s string
 	ld, err := ldap.Dial("tcp", l.Url)
 
+    result := make(map[string]string)
 	if l.Ldaps {
 		if err := ld.StartTLS(&tls.Config{InsecureSkipVerify: true}); err != nil {
 			log.Println(err.Error())
@@ -69,16 +70,16 @@ func LdapConnenct(c yee.Context, l *model.Ldap, user string, pass string, isTest
 
 	if err != nil {
 		c.Logger().Error(err.Error())
-		return false
+		return result, false
 	}
 	defer ld.Close()
 
 	if ld != nil {
 		if err := ld.Bind(l.User, l.Password); err != nil {
-			return false
+			return result, false
 		}
 		if isTest {
-			return true
+			return result, true
 		}
 
 	}
@@ -91,11 +92,22 @@ func LdapConnenct(c yee.Context, l *model.Ldap, user string, pass string, isTest
 		s = fmt.Sprintf("(cn=%s)", user)
 	}
 
+    attributes := []string{"dn"}
+    if l.Name != "" {
+        attributes = append(attributes, l.Name)
+    }
+    if l.Email != "" {
+        attributes = append(attributes, l.Email)
+    }
+    if l.Department != "" {
+        attributes = append(attributes, l.Department)
+    }
+
 	searchRequest := ldap.NewSearchRequest(
 		l.Sc,
 		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases, 0, 0, false,
 		fmt.Sprintf("(&(objectClass=organizationalPerson)%s%s)", s, l.Filter),
-		[]string{"dn"},
+        attributes,
 		nil,
 	)
 
@@ -103,21 +115,31 @@ func LdapConnenct(c yee.Context, l *model.Ldap, user string, pass string, isTest
 
 	if err != nil {
 		log.Println(err.Error())
-		return false
+		return result, false
 	}
 
 	if len(sr.Entries) != 1 {
 		log.Println("User does not exist or too many entries returned")
-		return false
+		return result, false
 	}
 
 	userdn := sr.Entries[0].DN
 
 	if err := ld.Bind(userdn, pass); err != nil {
 		c.Logger().Error(err.Error())
-		return false
+		return result, false
 	}
-	return true
+    entry := sr.Entries[0]
+    if l.Name != "" {
+        result["name"] = entry.GetAttributeValue(l.Name)
+    }
+    if l.Department != "" {
+        result["department"] = entry.GetAttributeValue(l.Department)
+    }
+    if l.Email != "" {
+        result["email"] = entry.GetAttributeValue(l.Email)
+    }
+	return result, true
 }
 
 func Axis() []string {

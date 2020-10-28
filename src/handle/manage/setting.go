@@ -102,7 +102,7 @@ func SuperTestSetting(c yee.Context) (err error) {
 			return c.JSON(http.StatusInternalServerError, err.Error())
 		}
 
-		if k := lib.LdapConnenct(c, &ld.Ldap, "", "", true); k {
+		if _, k := lib.LdapConnenct(c, &ld.Ldap, "", "", true); k {
 			return c.JSON(http.StatusOK, "ldap连接成功!")
 		} else {
 			return c.JSON(http.StatusOK, "ldap连接失败!")

@@ -53,13 +53,16 @@ type Message struct {
 }
 
 type Ldap struct {
-	Url      string `json:"url"`
-	User     string `json:"user"`
-	Password string `json:"password"`
-	Type     int    `json:"type"`
-	Sc       string `json:"sc"`
-	Ldaps    bool   `json:"ldaps"`
-    Filter   string `json:"filter"`
+	Url        string `json:"url"`
+	User       string `json:"user"`
+	Password   string `json:"password"`
+	Type       int    `json:"type"`
+	Sc         string `json:"sc"`
+	Ldaps      bool   `json:"ldaps"`
+    Filter     string `json:"filter"`
+    Name       string `json:"name"`
+    Department string `json:"department"`
+    Email      string `json:"email"`
 }
 
 type QueryParams struct {

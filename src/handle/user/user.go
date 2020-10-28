@@ -54,15 +54,15 @@ func UserLdapLogin(c yee.Context) (err error) {
 		c.Logger().Error(err.Error())
 		return c.JSON(http.StatusInternalServerError, "")
 	}
-	if lib.LdapConnenct(c, &model.GloLdap, u.Username, u.Password, false) {
+    if info, ret := lib.LdapConnenct(c, &model.GloLdap, u.Username, u.Password, false); ret {
 		if model.DB().Where("username = ?", u.Username).First(&account).RecordNotFound() {
 			model.DB().Create(&model.CoreAccount{
 				Username:   u.Username,
-				RealName:   "请重置你的真实姓名",
+				RealName:   info["name"],
 				Password:   lib.DjangoEncrypt(lib.GenWorkid(), string(lib.GetRandom())),
 				Rule:       "guest",
-				Department: "all",
-				Email:      "",
+				Department: info["department"],
+				Email:      info["email"],
 			})
 			ix, _ := json.Marshal([]string{})
 			model.DB().Create(&model.CoreGrained{Username: u.Username, Group: ix})
