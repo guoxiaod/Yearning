@@ -84,7 +84,6 @@ type AuditRole struct {
 	AllowCreateView                bool
 	AllowCreatePartition           bool
 	AllowSpecialType               bool
-	AllowForeignKey                bool
 	PRIRollBackErr                 bool
 }
 

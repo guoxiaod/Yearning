@@ -4,7 +4,7 @@ go 1.13
 
 require (
 	github.com/BurntSushi/toml v0.3.1
-	github.com/cookieY/yee v0.1.2
+	github.com/cookieY/yee v0.1.6
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/go-delve/delve v1.5.0 // indirect
 	github.com/go-sql-driver/mysql v1.4.1
