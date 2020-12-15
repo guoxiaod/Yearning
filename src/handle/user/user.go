@@ -45,7 +45,7 @@ type register struct {
 	UserInfo userInfo `json:"user_info"`
 }
 
-var CommonExpr = "username,rule,id,department,real_name,email"
+var CommonExpr = "username,rule,id,department,real_name,email,query_params"
 
 func UserLdapLogin(c yee.Context) (err error) {
 	var account model.CoreAccount
