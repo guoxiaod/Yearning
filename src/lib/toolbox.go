@@ -242,9 +242,9 @@ func SetExQueryTime(conn *sql.Conn, ctx context.Context, exQueryTime int) (error
     return nil
 }
 
-func checkLimitCount(sql string, limitCount int) (error) {
+func checkLimitCount(sql string, changed bool, limitCount int) (string, error) {
     if limitCount == 0 {
-        return nil
+        return sql, nil
     }
 
     // 不限制是否超过全局的配置
@@ -254,22 +254,29 @@ func checkLimitCount(sql string, limitCount int) (error) {
     // }
 
     var limit int
-    var re = regexp.MustCompile(`(?i)limit\s+(\d+)[\s;]*$`)
+    var re = regexp.MustCompile(`(?i)limit\s+((\d+)|((\d+)\s*,\s*(\d+)))(\s+offset\s+(?:\d+))?[\s;]*$`)
     results := re.FindStringSubmatch(sql)
-    if len(results) >= 2 {
-        limit, _ = strconv.Atoi(results[1])
+    if len(results) >= 7 {
+        if results[2] != "" {
+            limit, _ = strconv.Atoi(results[2])
+        } else if results[5] != "" {
+            limit, _ = strconv.Atoi(results[5])
+        }
     }
     if limitCount > 0 && limit > limitCount {
-        return errors.New(fmt.Sprintf("您每次最多可以查询 %d 条记录", limitCount))
+        if !changed {
+            return sql, errors.New(fmt.Sprintf("您每次最多可以查询 %d 条记录", limitCount))
+        }
+        sql = re.ReplaceAllString(sql, fmt.Sprintf("LIMIT ${4}%d${6}", limitCount))
     }
-    return nil
+    return sql, nil
 }
 
 func QueryMethod(source *model.CoreDataSource, req *model.Queryresults, wordList []string, queryParams model.QueryParams) (querydata, error) {
 
 	var qd querydata
 
-    err := checkLimitCount(req.Sql, queryParams.LimitCount)
+    sql_, err := checkLimitCount(req.Sql, req.Changed, queryParams.LimitCount)
     if err != nil {
         return qd, err
     }
@@ -300,7 +307,7 @@ func QueryMethod(source *model.CoreDataSource, req *model.Queryresults, wordList
 
     SetExQueryTime(conn, ctx, queryParams.ExQueryTime)
 
-	rows, err := conn.QueryContext(ctx, req.Sql)
+	rows, err := conn.QueryContext(ctx, sql_)
 	if err != nil {
 		return qd, err
 	}

@@ -97,6 +97,7 @@ type Queryresults struct {
 	Sql      string
 	Basename string
 	Source   string
+    Changed  bool
 }
 
 func DbInit(c string) {

@@ -237,6 +237,7 @@ func FetchQueryResults(c yee.Context) (err error) {
 
     uqr, _ = lib.GetUserQueryParams(user, req.Source, u)
 
+    req.Changed = req.Sql != r.SQL
 	req.Sql = r.SQL
 
 	//结束
